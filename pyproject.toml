@@ -1,0 +1,8 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+filterwarnings = [
+    # Raised inside Keras with NumPy 2, not by this project's code.
+    "ignore:__array__ implementation doesn't accept a copy keyword:DeprecationWarning",
+]

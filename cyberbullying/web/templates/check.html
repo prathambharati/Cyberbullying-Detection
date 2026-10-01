@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Check a message | Cyberbullying Detection{% endblock %}
+
+{% block content %}
+<section class="intro">
+  <h1>Check a message</h1>
+  <p class="muted">See how the model scores any text, the same way it scores posts. Nothing you type here is saved.</p>
+</section>
+
+<form method="post" class="card composer">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label for="text" class="visually-hidden">Text to check</label>
+  <textarea id="text" name="text" rows="4" maxlength="{{ config.MAX_TEXT_LENGTH }}" placeholder="Type or paste a message" required>{{ text }}</textarea>
+  {% if error %}<p class="blocked" role="alert">{{ error }}</p>{% endif %}
+  <div class="row">
+    <span class="muted small">Anything scoring {{ '%.2f' % threshold }} or more is blocked</span>
+    <button>Check</button>
+  </div>
+</form>
+
+{% if result %}
+<section class="card result {{ 'result-bad' if result.is_bullying else 'result-ok' }}" aria-live="polite">
+  <h2>{{ "This would be blocked" if result.is_bullying else "This would be posted" }}</h2>
+  <div class="meter" role="img" aria-label="Bullying score {{ '%.2f' % result.score }} out of 1">
+    <span class="meter-fill" style="width: {{ (result.score * 100) | round(1) }}%"></span>
+    <span class="meter-mark" style="left: {{ (threshold * 100) | round(1) }}%" title="Blocking threshold"></span>
+  </div>
+  <p>Bullying score <strong>{{ '%.2f' % result.score }}</strong>{% if result.category and result.category != 'other' %}, most likely targeting <strong>{{ result.category }}</strong>{% endif %}.</p>
+
+  <h3>If it's bullying, what is it about?</h3>
+  <p class="muted small">This part only matters once a message is flagged. It learned from tweets and comments labelled by who the abuse targets.</p>
+  <ul class="bars">
+    {% for name, p in result.categories | dictsort(by='value', reverse=true) %}
+      <li>
+        <span class="bar-label">{{ name }}</span>
+        <span class="bar"><span style="width: {{ (p * 100) | round(1) }}%"></span></span>
+        <span class="bar-value">{{ '%.0f' % (p * 100) }}%</span>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <h3>What the model read</h3>
+  <p class="tokens">{% for token, known in tokens %}<span class="token{{ '' if known else ' unknown' }}">{{ token }}</span>{% endfor %}</p>
+  <p class="muted small">Links, @mentions and most punctuation are dropped. Faded words weren't common enough in the training data to get their own entry.</p>
+</section>
+{% endif %}
+{% endblock %}

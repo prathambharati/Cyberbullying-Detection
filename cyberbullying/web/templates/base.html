@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Cyberbullying Detection{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a class="brand" href="{{ url_for('views.feed') }}"><span class="brand-mark" aria-hidden="true"></span>Cyberbullying Detection</a>
+      <nav aria-label="Main">
+        <a href="{{ url_for('views.feed') }}"{% if request.endpoint in ('views.feed', 'views.show_post') %} aria-current="page"{% endif %}>Feed</a>
+        <a href="{{ url_for('views.check') }}"{% if request.endpoint == 'views.check' %} aria-current="page"{% endif %}>Check a message</a>
+        <a href="{{ url_for('views.news') }}"{% if request.endpoint == 'views.news' %} aria-current="page"{% endif %}>News</a>
+        {% if g.user %}
+          <a href="{{ url_for('auth.account') }}"{% if request.endpoint == 'auth.account' %} aria-current="page"{% endif %}>{{ g.user.username }}</a>
+          <form method="post" action="{{ url_for('auth.logout') }}" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="link-button">Log out</button>
+          </form>
+        {% else %}
+          <a href="{{ url_for('auth.login') }}"{% if request.endpoint in ('auth.login', 'auth.face_login') %} aria-current="page"{% endif %}>Log in</a>
+          <a class="button small" href="{{ url_for('auth.register') }}">Sign up</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+      <p class="flash{% if category == 'error' %} flash-error{% endif %}" role="status">{{ message }}</p>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="wrap site-footer">
+    Every post and comment is checked by a BiLSTM model before it goes up.
+    <a href="{{ url_for('views.check') }}">See how it scores a message.</a>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

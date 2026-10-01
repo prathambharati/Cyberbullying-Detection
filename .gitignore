@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Created when the app runs: the database and the secret key
+/instance/
+
+# Downloads (python -m cyberbullying.downloads). The leading slash matters:
+# tests/data holds test fixtures that do belong in git.
+/data/
+/models/vision/
+*.part
+
+.DS_Store
+Thumbs.db

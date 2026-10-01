@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Your account | Cyberbullying Detection{% endblock %}
+
+{% block content %}
+<section class="narrow">
+  <h1>{{ g.user.username }}</h1>
+  <p class="muted">Face login needs two things: a saved face and a 4 digit PIN. The PIN also works with the hands-free webcam tool, where you type it by blinking.</p>
+
+  <section class="card stack">
+    <h2>Face</h2>
+    {% if not face_available %}
+      <p>Face login is off on this server. Run <code>python -m cyberbullying.downloads</code> and restart the app to turn it on.</p>
+    {% else %}
+      <p>{% if has_face %}A face is saved. You can replace it below.{% else %}No face saved yet.{% endif %}
+        Only a list of 128 numbers describing your face is kept, never a photo.</p>
+      <form class="stack" data-camera-form data-endpoint="{{ url_for('auth.save_face') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="camera"><video muted playsinline></video></div>
+        <label>Your password, to confirm it's you
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="status muted" role="status">Look straight at the camera in good light. It takes three quick pictures.</p>
+        <button type="submit">{{ "Replace my face" if has_face else "Save my face" }}</button>
+      </form>
+      {% if has_face %}
+        <form method="post" action="{{ url_for('auth.delete_face') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="secondary">Delete my face data</button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>PIN</h2>
+    <p>{% if has_pin %}A PIN is set. Enter a new one to change it.{% else %}No PIN set yet.{% endif %}</p>
+    <form method="post" action="{{ url_for('auth.set_pin') }}" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>New PIN
+        <input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required>
+      </label>
+      <label>New PIN again
+        <input name="confirm" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required>
+      </label>
+      <label>Your password
+        <input name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <button>Save PIN</button>
+    </form>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='camera.js') }}"></script>{% endblock %}

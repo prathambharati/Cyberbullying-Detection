@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import composer, score_badge with context %}
+
+{% block content %}
+<section class="intro">
+  <h1>The feed</h1>
+  <p class="muted">Posts and comments go past a cyberbullying classifier first. If it flags something, the writer gets it back with a note instead of it being published.</p>
+</section>
+
+{% if g.user %}
+  {{ composer(url_for('views.create_post'), "What's on your mind, " ~ g.user.username ~ "?", "Post", draft or '', error) }}
+{% else %}
+  <p class="card muted">
+    <a href="{{ url_for('auth.login') }}">Log in</a> or <a href="{{ url_for('auth.register') }}">sign up</a> to post.
+    You can also <a href="{{ url_for('views.check') }}">try the model</a> without an account.
+  </p>
+{% endif %}
+
+{% for post in posts %}
+  <article class="card post">
+    <header class="row">
+      <strong>{{ post.username }}</strong>
+      <span class="muted small">{{ post.created_at | ago }}</span>
+    </header>
+    <p class="body">{{ post.body }}</p>
+    <footer class="row small muted">
+      <a href="{{ url_for('views.show_post', post_id=post.id) }}">{{ post.comment_count }} comment{{ '' if post.comment_count == 1 else 's' }}</a>
+      {{ score_badge(post.score) }}
+    </footer>
+  </article>
+{% else %}
+  <p class="empty muted">Nothing here yet. {% if g.user %}Say something nice to get it started.{% else %}Sign up and write the first post.{% endif %}</p>
+{% endfor %}
+{% endblock %}

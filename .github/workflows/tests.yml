@@ -1,0 +1,49 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # MediaPipe loads libEGL even on the CPU, so it needs the EGL and GLES libraries.
+      - name: System libraries for OpenCV and MediaPipe
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0 libportaudio2 libegl1 libgles2
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      - name: Cache the face and eye models
+        uses: actions/cache@v6
+        with:
+          path: models/vision
+          key: vision-models-${{ hashFiles('cyberbullying/downloads.py') }}
+
+      - name: Download the face and eye models
+        run: python -m cyberbullying.downloads
+
+      - name: Run the tests
+        run: pytest --junitxml=test-results.xml
+
+      # Turn each failing test into an annotation, so it shows up on the run
+      # summary and in pull requests without digging through the log.
+      - name: Point out failing tests
+        if: failure()
+        run: |
+          python - <<'EOF'
+          import xml.etree.ElementTree as ET
+          for case in ET.parse("test-results.xml").iter("testcase"):
+              for problem in [*case.findall("failure"), *case.findall("error")]:
+                  detail = (problem.get("message") or "") + "\n" + (problem.text or "")[-800:]
+                  detail = detail.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+                  print(f"::error title={case.get('classname')}.{case.get('name')}::{detail}")
+          EOF

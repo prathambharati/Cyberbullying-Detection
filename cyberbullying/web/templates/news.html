@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}News | Cyberbullying Detection{% endblock %}
+
+{% block content %}
+<section class="intro">
+  <h1>News</h1>
+  <p class="muted">Top headlines from the Times of India, refreshed every 15 minutes.</p>
+</section>
+
+{% if error %}
+  <p class="card flash-error" role="alert">{{ error }}</p>
+{% endif %}
+
+{% for item in headlines %}
+  <article class="card headline">
+    <h2><a href="{{ item.link }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></h2>
+    {% if item.summary %}<p>{{ item.summary | truncate(280) }}</p>{% endif %}
+    {% if item.published %}<p class="muted small">{{ item.published.isoformat() | ago }}</p>{% endif %}
+  </article>
+{% else %}
+  {% if not error %}<p class="empty muted">The feed is empty right now.</p>{% endif %}
+{% endfor %}
+{% endblock %}

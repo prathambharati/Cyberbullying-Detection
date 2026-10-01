@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "_macros.html" import composer, score_badge with context %}
+
+{% block title %}{{ post.username }}'s post | Cyberbullying Detection{% endblock %}
+
+{% block content %}
+<p><a href="{{ url_for('views.feed') }}">Back to the feed</a></p>
+
+<article class="card post">
+  <header class="row">
+    <strong>{{ post.username }}</strong>
+    <span class="muted small">{{ post.created_at | ago }}</span>
+  </header>
+  <p class="body">{{ post.body }}</p>
+  <footer class="row small muted">
+    <span>{{ comments | length }} comment{{ '' if comments | length == 1 else 's' }}</span>
+    {{ score_badge(post.score) }}
+  </footer>
+</article>
+
+<section class="comments">
+  {% for comment in comments %}
+    <div class="comment">
+      <div class="row">
+        <strong>{{ comment.username }}</strong>
+        <span class="muted small">{{ comment.created_at | ago }} · {{ score_badge(comment.score) }}</span>
+      </div>
+      <p class="body">{{ comment.body }}</p>
+    </div>
+  {% else %}
+    <p class="muted">No comments yet.</p>
+  {% endfor %}
+</section>
+
+{% if g.user %}
+  {{ composer(url_for('views.add_comment', post_id=post.id), "Write a comment", "Comment", draft or '', error) }}
+{% else %}
+  <p class="card muted"><a href="{{ url_for('auth.login', next=request.path) }}">Log in</a> to comment.</p>
+{% endif %}
+{% endblock %}

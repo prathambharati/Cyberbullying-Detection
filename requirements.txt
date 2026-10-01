@@ -1,0 +1,15 @@
+# The classifier and the web app
+tensorflow>=2.16,<3
+numpy>=1.26
+pandas>=2.1
+scikit-learn>=1.4
+flask>=3.0,<4
+requests>=2.31
+feedparser>=6.0
+pyarrow>=14  # reads the hate speech corpus when retraining
+
+# Face login and the blink PIN. The app runs without the model files; these
+# packages only need to be importable. MediaPipe depends on the contrib build
+# of OpenCV, so use that one instead of opencv-python.
+opencv-contrib-python>=4.8
+mediapipe>=0.10.14

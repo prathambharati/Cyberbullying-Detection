@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Top Headlines - Test Feed</title>
+    <link>https://example.com</link>
+    <description>Made up headlines for tests</description>
+    <item>
+      <title>Monsoon reaches Kerala three days early</title>
+      <link>https://example.com/monsoon</link>
+      <description><![CDATA[<img src="https://example.com/rain.jpg" /> Rain reached the coast <b>three days</b> ahead of schedule.]]></description>
+      <pubDate>Mon, 28 Sep 2026 09:30:00 +0530</pubDate>
+    </item>
+    <item>
+      <title>This one has a bad link</title>
+      <link>javascript:alert(1)</link>
+      <description>Should be skipped.</description>
+    </item>
+    <item>
+      <title>Library hours extended for exam week</title>
+      <link>https://example.com/library</link>
+      <description></description>
+    </item>
+    <item>
+      <title>Local team wins the state robotics final</title>
+      <link>https://example.com/robotics</link>
+      <description>Students celebrated after a close final round.</description>
+    </item>
+  </channel>
+</rss>

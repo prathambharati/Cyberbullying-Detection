@@ -1,0 +1,16 @@
+{% macro composer(action, placeholder, button, draft='', error=None) %}
+<form method="post" action="{{ action }}" class="card composer">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label for="body" class="visually-hidden">{{ placeholder }}</label>
+  <textarea id="body" name="body" rows="3" maxlength="{{ config.MAX_TEXT_LENGTH }}" placeholder="{{ placeholder }}" required>{{ draft }}</textarea>
+  {% if error %}<p class="blocked" role="alert">{{ error }}</p>{% endif %}
+  <div class="row">
+    <span class="muted small">Checked for bullying before it's posted</span>
+    <button>{{ button }}</button>
+  </div>
+</form>
+{% endmacro %}
+
+{% macro score_badge(score) %}
+<span class="badge" title="The model's bullying score when this was posted. Anything at or above the threshold is blocked.">score {{ '%.2f' % score }}</span>
+{% endmacro %}

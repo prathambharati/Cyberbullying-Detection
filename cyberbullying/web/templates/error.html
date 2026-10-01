@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}{{ code }} | Cyberbullying Detection{% endblock %}
+
+{% block content %}
+<section class="narrow">
+  <h1>{{ code }}</h1>
+  <p>{{ message }}</p>
+  <p><a href="{{ url_for('views.feed') }}">Back to the feed</a></p>
+</section>
+{% endblock %}
