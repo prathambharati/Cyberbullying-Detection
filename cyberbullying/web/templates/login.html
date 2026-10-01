@@ -1,11 +1,14 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon, logo with context %}
 
-{% block title %}Log in | Cyberbullying Detection{% endblock %}
+{% block title %}Log in | {{ config.APP_NAME }}{% endblock %}
 
 {% block content %}
-<section class="narrow">
-  <h1>Log in</h1>
-  <form method="post" class="card stack">
+<section class="card auth">
+  <div class="auth-logo">{{ logo(56) }}</div>
+  <h1>Welcome back</h1>
+  <p class="muted">Log in to post, comment and like.</p>
+  <form method="post" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="next" value="{{ next }}">
     <label>Username
@@ -14,10 +17,11 @@
     <label>Password
       <input name="password" type="password" autocomplete="current-password" required>
     </label>
-    {% if error %}<p class="blocked" role="alert">{{ error }}</p>{% endif %}
-    <button>Log in</button>
+    {% if error %}<p class="notice warn" role="alert">{{ icon("alert") }}<span>{{ error }}</span></p>{% endif %}
+    <button class="button primary block">Log in</button>
   </form>
-  <p class="muted">Set up face login on your account page? <a href="{{ url_for('auth.face_login') }}">Log in with your face and PIN</a>.</p>
-  <p class="muted">New here? <a href="{{ url_for('auth.register') }}">Create an account</a>.</p>
+  <div class="divider"><span>or</span></div>
+  <a class="button block" href="{{ url_for('auth.face_login') }}">{{ icon("camera") }}<span>Log in with your face and PIN</span></a>
+  <p class="muted small center">New here? <a href="{{ url_for('auth.register') }}">Create an account</a></p>
 </section>
 {% endblock %}

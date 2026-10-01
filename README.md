@@ -2,25 +2,32 @@
 
 [![tests](https://github.com/prathambharati/Cyberbullying-Detection/actions/workflows/tests.yml/badge.svg)](https://github.com/prathambharati/Cyberbullying-Detection/actions/workflows/tests.yml)
 
-A small social feed that stops cyberbullying before it's posted. Every post and
-comment goes through a BiLSTM classifier first. If it reads as abusive, the
-writer gets it back with a note instead of it going up, along with what the
-abuse seems to be about: age, ethnicity, gender, religion or something else.
+**Kindfeed** is a small social app that stops cyberbullying before it's posted. Every post and comment goes through
+a BiLSTM classifier first. If it reads as abusive, the writer gets it back, with the words that set it off
+highlighted and what the abuse seems to be aimed at: age, ethnicity, gender, religion or something else. A meter
+under the text box warns you while you're still typing.
 
-It also has two ways to log in with a webcam: face recognition in the browser,
-and a hands-free PIN you type in Morse code by blinking.
+It also has two ways to log in with a webcam: face recognition in the browser, and a hands-free PIN you type in
+Morse code by blinking.
 
-![A post being sent back by the classifier](docs/feed.png)
+![The Kindfeed feed, with a post being sent back and the words that set it off highlighted](docs/feed.png)
+
+<p align="center">
+  <img src="docs/mobile.png" alt="Kindfeed on a phone, with stories and a bottom tab bar" width="300">
+  &nbsp;&nbsp;
+  <img src="docs/check.png" alt="The model playground explaining why a message would be blocked" width="520">
+</p>
 
 ## What's in here
 
-- **A moderated feed.** Sign up, post, comment. Anything the model flags is sent back to the writer and never saved.
-- **A classifier with two heads.** One decides whether to block a message. The other says what the bullying targets.
-- **A model playground.** The "Check a message" page shows the score, the category breakdown and the exact tokens the model read. There's a JSON API too.
+- **A social feed.** Post, comment and like, with stories of who's been active, profile pages, a heart burst when you double-click a post, a light and a dark theme, and a phone layout with a bottom tab bar.
+- **Moderation you can see.** Anything the model flags goes back to the writer and is never saved. The notice says why and highlights the words that pushed the score up, and a live meter warns you before you even hit Post.
+- **A classifier with two heads.** One decides whether to block a message. The other says who the abuse targets.
+- **A model playground.** The "Try the model" page scores any text word by word, with one-click examples. There's a JSON API too.
 - **Face and PIN login.** In the browser, your face (checked with OpenCV's SFace model) plus a typed PIN. In the desktop tool, your face plus a PIN you blink.
-- **A news page** with the Times of India top headlines.
+- **A news page** with today's top stories from the Times of India.
 - **A reproducible training script** that downloads its own data, checks every file's hash and writes a model card with test scores.
-- **106 tests**, run on every push by GitHub Actions.
+- **122 tests**, run on every push by GitHub Actions, plus a script that clicks through the whole app in Chrome.
 
 ## Quick start
 
@@ -33,11 +40,13 @@ python -m venv .venv
 .venv\Scripts\activate            # on macOS or Linux: source .venv/bin/activate
 pip install -r requirements.txt
 
-flask --app cyberbullying.web seed    # optional: two demo users and a few posts
+flask --app cyberbullying.web seed    # optional: five demo people with posts, comments and likes
 flask --app cyberbullying.web run
 ```
 
 Then open http://127.0.0.1:5000. The trained model is already in `models/`, so there's nothing to train first.
+The demo accounts are maya, sam, arjun, lena and kofi, all with the password `demo-password`. To give the app a
+different name, set `CB_APP_NAME` before starting it.
 
 To turn on face login, download the face and eye models (43 MB) and restart the app:
 
@@ -88,14 +97,11 @@ identity cases, so failures like these show up straight away. The current model 
 - **Naming the target.** A generic insult has no target, but a softmax always picks one, so the app only names a kind when the head is at least 80% sure and calls it "other" otherwise. On the validation set that names the target for 89% of targeted abuse, and 96% of those names are right.
 - **Long posts.** The model reads 128 tokens at a time. Longer posts are split into overlapping windows and judged by their worst window, so an insult at the end of a long comment still gets caught.
 - **Threshold.** Chosen on the validation set to maximise F1 for "harmful".
+- **Explaining a decision.** Each word is left out in turn and the rest is scored again. How far the score drops is that word's weight, and that's what the highlights in the app show. It's a simple method, but it only uses what the model actually does.
 
 Duplicates are removed before splitting, tweets that appear under two different labels are dropped (3,495 of them),
 hate speech comments in the corpus's ambiguous middle band are left out (11,736 of them), and any test text
 that also appears in training is taken out, so the scores below aren't inflated by text the model has seen.
-
-The "Check a message" page shows all of this for any text you type:
-
-![The model playground scoring a message](docs/check.png)
 
 ## Results
 
@@ -225,6 +231,16 @@ The route tests use stand-ins for the model and the face recognizer, so they're 
 model thinks. Separate tests run the real model, the real face models on public domain NASA portraits, and the whole
 training script on a tiny made-up dataset.
 
+To click through the running app in a real browser, using the Chrome you already have:
+
+```bash
+pip install playwright
+python scripts/browser_check.py
+```
+
+It signs up, types, posts, likes, comments, switches theme and tries the phone layout, 29 checks in all, and fails
+on any JavaScript error. `--screenshots docs` retakes the pictures in this README.
+
 ## Project layout
 
 ```text
@@ -239,10 +255,11 @@ cyberbullying/
   morse.py         Morse code for digits
   webcam.py        desktop tools: enroll, face + blink login, blink practice
   news.py          headlines from the Times of India feed, with caching
-  db.py            SQLite storage for users, posts and comments
+  db.py            SQLite storage for users, posts, comments and likes
   downloads.py     fetches data and model files and checks their hashes
-  web/             the Flask app: routes, templates, CSS and camera script
+  web/             the Flask app: routes, templates, styles and scripts
 models/            the trained classifier and its model card
+scripts/           browser_check.py, the click-through test in Chrome
 tests/             pytest suite and test data
 ```
 
@@ -251,7 +268,8 @@ tests/             pytest suite and test data
 - Passwords and PINs are stored as salted scrypt hashes (Werkzeug), never in plain text.
 - Every form has a CSRF token, and sessions are reset at login.
 - Face data is 128 numbers per user, not a photo, and users can delete it from their account page.
-- Blocked posts are never written to the database.
+- Blocked posts are never written to the database. The live meter scores drafts as you type but doesn't keep them.
+- Only the person who wrote a post can delete it.
 - Links on the news page must be http or https, so a bad feed can't inject `javascript:` links.
 - The secret key is generated per install and kept out of git, along with the database.
 

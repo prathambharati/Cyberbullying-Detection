@@ -1,24 +1,30 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon with context %}
 
-{% block title %}News | Cyberbullying Detection{% endblock %}
+{% block title %}News | {{ config.APP_NAME }}{% endblock %}
 
 {% block content %}
-<section class="intro">
-  <h1>News</h1>
-  <p class="muted">Top headlines from the Times of India, refreshed every 15 minutes.</p>
-</section>
+<header class="page-head">
+  <h1>{{ icon("news") }} News</h1>
+  <p class="muted">Top stories from the Times of India, refreshed every 15 minutes.</p>
+</header>
 
 {% if error %}
-  <p class="card flash-error" role="alert">{{ error }}</p>
+  <p class="notice warn" role="alert">{{ icon("alert") }}<span>{{ error }}</span></p>
 {% endif %}
 
 {% for item in headlines %}
   <article class="card headline">
-    <h2><a href="{{ item.link }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></h2>
-    {% if item.summary %}<p>{{ item.summary | truncate(280) }}</p>{% endif %}
-    {% if item.published %}<p class="muted small">{{ item.published.isoformat() | ago }}</p>{% endif %}
+    {% if item.image %}
+      <img class="thumb" src="{{ item.image }}" alt="" loading="lazy" referrerpolicy="no-referrer" data-hide-if-broken>
+    {% endif %}
+    <div>
+      <span class="source">The Times of India{% if item.published %} · {{ item.published.isoformat() | ago }}{% endif %}</span>
+      <h2><a href="{{ item.link }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></h2>
+      {% if item.summary %}<p>{{ item.summary | truncate(200) }}</p>{% endif %}
+    </div>
   </article>
 {% else %}
-  {% if not error %}<p class="empty muted">The feed is empty right now.</p>{% endif %}
+  {% if not error %}<div class="empty"><span class="empty-emoji" aria-hidden="true">📰</span><p class="muted">The feed is empty right now.</p></div>{% endif %}
 {% endfor %}
 {% endblock %}

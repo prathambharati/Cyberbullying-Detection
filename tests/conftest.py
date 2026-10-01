@@ -8,7 +8,7 @@ from cyberbullying.classifier import Prediction
 from cyberbullying.data import KINDS
 from cyberbullying.face import NoFaceError
 from cyberbullying.paths import MODELS_DIR
-from cyberbullying.text import PAD, UNKNOWN, Vocabulary
+from cyberbullying.text import PAD, UNKNOWN, Vocabulary, tokenize
 
 DATA = Path(__file__).parent / "data"
 
@@ -41,6 +41,9 @@ class KeywordClassifier:
         categories = {kind: 0.2 for kind in KINDS}
         return Prediction(score=0.97 if bad else 0.03, is_bullying=bad, category="other" if bad else None,
                           categories=categories)
+
+    def explain(self, text):
+        return [(word, 0.9 if word == "idiot" else 0.0) for word in tokenize(text)]
 
 
 class ColorMatcher:

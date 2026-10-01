@@ -1,17 +1,18 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon, logo with context %}
 
-{% block title %}Face login | Cyberbullying Detection{% endblock %}
+{% block title %}Face login | {{ config.APP_NAME }}{% endblock %}
 
 {% block content %}
-<section class="narrow">
+<section class="card auth">
+  <div class="auth-logo">{{ logo(56) }}</div>
   <h1>Log in with your face</h1>
   {% if not available %}
-    <p class="card">
-      Face login is off because the face models aren't downloaded yet. Run
-      <code>python -m cyberbullying.downloads</code> and restart the app.
-    </p>
+    <p class="notice warn">{{ icon("alert") }}<span>Face login is off because the face models aren't downloaded yet.
+      Run <code>python -m cyberbullying.downloads</code> and restart the app.</span></p>
   {% else %}
-    <form class="card stack" data-camera-form data-endpoint="{{ url_for('auth.face_login') }}">
+    <p class="muted">Your camera turns on when you press the button. The pictures are only used for this check and aren't saved.</p>
+    <form class="stack" data-camera-form data-endpoint="{{ url_for('auth.face_login') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>Username
         <input name="username" autocomplete="username" required>
@@ -20,10 +21,10 @@
         <input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required>
       </label>
       <div class="camera"><video muted playsinline></video></div>
-      <p class="status muted" role="status">Your camera turns on when you press the button. The pictures are only used for this check and aren't saved.</p>
-      <button type="submit">Check my face</button>
+      <p class="status muted" role="status">Look straight at the camera in good light.</p>
+      <button type="submit" class="button primary block">{{ icon("camera") }}<span>Check my face</span></button>
     </form>
-    <p class="muted small">No face or PIN saved yet? <a href="{{ url_for('auth.login') }}">Log in with your password</a> and set them up on your account page.</p>
+    <p class="muted small center">No face or PIN saved yet? <a href="{{ url_for('auth.login') }}">Log in with your password</a> and set them up in Settings.</p>
   {% endif %}
 </section>
 {% endblock %}

@@ -37,6 +37,29 @@ def test_the_threshold_decides_what_is_blocked():
     assert fixed(0.5, [0.2] * 5).predict_one("hello").is_bullying
     assert not fixed(0.49, [0.2] * 5).predict_one("hello").is_bullying
 
+
+class OneBadWord:
+    """Scores 0.9 whenever a given token id is in the input and 0.1 otherwise."""
+
+    def __init__(self, bad_id):
+        self.bad_id = bad_id
+
+    def predict_on_batch(self, x):
+        harm = np.where((x == self.bad_id).any(axis=1), 0.9, 0.1).astype("float32").reshape(-1, 1)
+        return {"harm": harm, "kind": np.full((len(x), len(KINDS)), 1 / len(KINDS), dtype="float32")}
+
+
+def test_explain_finds_the_word_that_matters():
+    vocab = Vocabulary([PAD, UNKNOWN, "you", "idiot"])
+    classifier = Classifier(OneBadWord(bad_id=3), vocab, KINDS, max_len=8, threshold=0.5)
+    assert classifier.explain("you idiot") == [("you", 0.0), ("idiot", 0.8)]
+    # Leaving out the only word leaves nothing to judge, so that word carries the whole score.
+    assert classifier.explain("idiot") == [("idiot", 0.9)]
+    assert classifier.explain("") == []
+    # It works past the model's window length too.
+    long_text = "you " * 20 + "idiot"
+    assert dict(classifier.explain(long_text))["idiot"] == 0.8
+
 CLEARLY_ABUSIVE = [
     "shut up you dumb idiot",
     "You are such a stupid loser, nobody likes you!",
@@ -109,3 +132,10 @@ def test_text_without_words_scores_zero(classifier):
 
 def test_emoji_only_text_is_not_flagged(classifier):
     assert not classifier.predict_one("\U0001F602\U0001F602").is_bullying
+
+
+def test_explain_points_at_the_insult(classifier):
+    weights = dict(classifier.explain("shut up you dumb idiot"))
+    assert max(weights, key=weights.get) in {"dumb", "idiot"}
+    assert all(weight >= 0 for weight in weights.values())
+    assert max(classifier.explain("Happy birthday! Hope you have an amazing day."), key=lambda item: item[1])[1] < 0.1

@@ -3,10 +3,11 @@ from io import BytesIO
 
 from cyberbullying import db
 from cyberbullying.news import Headline
-from cyberbullying.web import _ago
+from cyberbullying.web import DEMO_COMMENTS, DEMO_POSTS, DEMO_USERS, _ago, _hue, _initial
 from tests.conftest import FakeNews, csrf, jpeg, make_app, post, register, solid
 
 RED, BLUE, BLACK = solid((0, 0, 255)), solid((255, 0, 0)), solid((0, 0, 0))
+FETCH = {"X-Requested-With": "fetch"}
 
 
 def page(response) -> str:
@@ -32,19 +33,27 @@ def send_frames(client, url, picture, count=3, **fields):
     return client.post(url, data=data, content_type="multipart/form-data")
 
 
+def like(client, post_id, **kwargs):
+    return client.post(f"/posts/{post_id}/like", headers={"X-CSRF-Token": csrf(client), **FETCH}, **kwargs)
+
+
 # Accounts
 
-def test_feed_starts_empty(client):
+def test_visitors_get_a_welcome(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert "Nothing here yet" in page(response)
+    html = page(response)
+    assert "Share kindly." in html and "Nothing here yet" in html
+    assert 'href="/register"' in html
 
 
 def test_signing_up_logs_you_in(client):
     response = register(client)
     assert response.status_code == 302 and response.headers["Location"] == "/"
     assert logged_in_user(client)
-    assert "What&#39;s on your mind, maya?" in page(client.get("/"))
+    html = page(client.get("/"))
+    assert "What&#39;s on your mind, maya?" in html
+    assert "Welcome, maya!" in html  # shown as a toast
 
 
 def test_sign_up_checks_its_fields(client):
@@ -97,16 +106,21 @@ def test_posting_needs_an_account(client):
 def test_a_kind_post_is_published(client):
     register(client)
     assert post(client, "/posts", {"body": "Hello everyone, happy Friday!"}).status_code == 302
-    feed = page(client.get("/"))
-    assert "Hello everyone, happy Friday!" in feed and "score 0.03" in feed
+    html = page(client.get("/"))
+    assert "Hello everyone, happy Friday!" in html
+    assert "Checked · 0.03" in html
 
 
-def test_a_bullying_post_is_sent_back_and_not_saved(client, app):
+def test_a_bullying_post_is_sent_back_with_the_reason(client, app):
     register(client)
     response = post(client, "/posts", {"body": "you absolute idiot"})
+    html = page(response)
     assert response.status_code == 422
-    assert "wasn&#39;t posted" in page(response)
-    assert "you absolute idiot</textarea>" in page(response)  # the draft is kept for editing
+    assert "Hold on, this reads like cyberbullying." in html
+    assert "you absolute idiot</textarea>" in html  # the draft is kept for editing
+    # The word that set it off is highlighted at full strength, the others not at all.
+    assert 'style="--w: 1.00" title="Weight 0.90">idiot</mark>' in html
+    assert 'style="--w: 0.00" title="Weight 0.00">absolute</mark>' in html
     assert rows(app, "SELECT * FROM posts") == []
 
 
@@ -116,17 +130,23 @@ def test_empty_and_overlong_posts(client):
     assert "Keep it under 1000" in page(post(client, "/posts", {"body": "a" * 1001}))
 
 
+def test_the_composer_is_wired_for_live_scoring(client):
+    register(client)
+    html = page(client.get("/"))
+    assert 'data-composer' in html and 'data-score-url="/api/score"' in html and 'data-threshold="0.5"' in html
+
+
 def test_comments_are_moderated_too(client, app):
     register(client)
     post(client, "/posts", {"body": "Who wants to study together?"})
     assert post(client, "/posts/1/comments", {"body": "Count me in"}).status_code == 302
     blocked = post(client, "/posts/1/comments", {"body": "not you, idiot"})
-    assert blocked.status_code == 422 and "wasn&#39;t posted" in page(blocked)
+    assert blocked.status_code == 422 and "Hold on" in page(blocked)
 
     thread = page(client.get("/posts/1"))
-    assert "Count me in" in thread and "not you, idiot" not in thread.split("</textarea>")[-1]
+    assert "Count me in" in thread and 'class="bubble"' in thread
     assert len(rows(app, "SELECT * FROM comments")) == 1
-    assert "1 comment<" in page(client.get("/"))
+    assert 'aria-label="Comments">' in page(client.get("/")) and "<span>1</span>" in page(client.get("/"))
 
 
 def test_missing_posts_are_404(client):
@@ -142,21 +162,102 @@ def test_post_bodies_are_escaped(client):
     assert "<script>alert(1)" not in page(client.get("/"))
 
 
+# Likes
+
+def test_liking_and_unliking(client, app):
+    register(client)
+    post(client, "/posts", {"body": "Sunny day at the beach"})
+    assert like(client, 1).get_json() == {"liked": True, "likes": 1}
+    assert 'aria-pressed="true"' in page(client.get("/"))
+    assert like(client, 1).get_json() == {"liked": False, "likes": 0}
+    assert rows(app, "SELECT * FROM likes") == []
+
+
+def test_likes_count_everyone(client, tmp_path):
+    register(client)
+    post(client, "/posts", {"body": "Sunny day at the beach"})
+    other = make_app(tmp_path).test_client()  # same database, a second person
+    register(other, "sam", "another password")
+    like(client, 1)
+    assert like(other, 1).get_json() == {"liked": True, "likes": 2}
+
+
+def test_liking_needs_login_a_real_post_and_the_csrf_token(client):
+    assert client.post("/posts/1/like", headers={"X-CSRF-Token": csrf(client), **FETCH}).status_code == 302
+    register(client)
+    assert like(client, 42).status_code == 404
+    post(client, "/posts", {"body": "hello"})
+    assert client.post("/posts/1/like", headers=FETCH).status_code == 400
+
+
+def test_liking_without_javascript_goes_back_to_the_same_page(client):
+    register(client)
+    post(client, "/posts", {"body": "hello"})
+    back = post(client, "/posts/1/like", headers={"Referer": "http://localhost/posts/1"})
+    assert back.status_code == 302 and back.headers["Location"] == "/posts/1"
+    elsewhere = post(client, "/posts/1/like", headers={"Referer": "https://evil.example//steal"})
+    assert elsewhere.headers["Location"] == "/"
+
+
+# Deleting and profiles
+
+def test_only_the_author_can_delete_a_post(client, tmp_path, app):
+    register(client)
+    post(client, "/posts", {"body": "My first post"})
+    other = make_app(tmp_path).test_client()
+    register(other, "sam", "another password")
+    assert post(other, "/posts/1/delete").status_code == 403
+    assert "isn&#39;t yours" in page(post(other, "/posts/1/delete"))
+
+    like(client, 1)
+    post(client, "/posts/1/comments", {"body": "Adding a note"})
+    response = post(client, "/posts/1/delete")
+    assert response.status_code == 302
+    assert rows(app, "SELECT * FROM posts") == []
+    assert rows(app, "SELECT * FROM likes") == [] and rows(app, "SELECT * FROM comments") == []
+    assert post(client, "/posts/1/delete").status_code == 404
+
+
+def test_profiles_show_posts_and_stats(client):
+    register(client)
+    post(client, "/posts", {"body": "Morning run done"})
+    post(client, "/posts", {"body": "Coffee time"})
+    like(client, 1)
+    html = page(client.get("/u/maya"))
+    assert "Morning run done" in html and "Coffee time" in html
+    assert "<strong>2</strong><span>posts</span>" in html
+    assert "<strong>1</strong><span>like</span>" in html
+    assert "Settings" in html  # it's your own profile
+    assert client.get("/u/nobody").status_code == 404
+
+
+def test_the_feed_shows_recent_posters_as_stories(client, tmp_path):
+    other = make_app(tmp_path).test_client()
+    register(other, "sam", "another password")
+    post(other, "/posts", {"body": "Hi from Sam"})
+    register(client)
+    html = page(client.get("/"))
+    assert 'class="stories"' in html and 'href="/u/sam"' in html
+    assert "<span>You</span>" in html
+
+
 # The model playground and API
 
 def test_check_page(client):
-    assert client.get("/check").status_code == 200
+    html = page(client.get("/check"))
+    assert 'data-example="shut up you dumb idiot"' in html
     kind = page(post(client, "/check", {"text": "hello there"}))
-    assert "This would be posted" in kind and '<span class="token">hello</span>' in kind
+    assert "This would go live" in kind and 'class="word" style="--w: 0.00">hello</mark>' in kind
     mean = page(post(client, "/check", {"text": "what an idiot"}))
-    assert "This would be blocked" in mean
+    assert "This would be sent back" in mean and 'class="word" style="--w: 1.00">idiot</mark>' in mean
+    assert 'class="word unknown"' in mean  # "what" isn't in the stand-in's tiny vocabulary
     assert post(client, "/check", {"text": " "}).status_code == 422
 
 
 def test_api_scores_one_or_many_texts(client):
     one = client.post("/api/score", json={"text": "hello"}).get_json()
-    assert one["is_bullying"] is False and one["score"] == 0.03 and set(one["categories"]) == {
-        "age", "ethnicity", "gender", "religion", "other"}
+    assert one["is_bullying"] is False and one["score"] == 0.03 and one["threshold"] == 0.5
+    assert set(one["categories"]) == {"age", "ethnicity", "gender", "religion", "other"}
     many = client.post("/api/score", json={"texts": ["hello", "idiot"]}).get_json()
     assert [r["is_bullying"] for r in many["results"]] == [False, True]
     assert many["results"][1]["category"] == "other" and many["threshold"] == 0.5
@@ -172,12 +273,14 @@ def test_api_rejects_bad_input(client):
 
 # News
 
-def test_news_page_lists_headlines(tmp_path):
-    headline = Headline("Monsoon arrives early", "https://example.com/rain", "Rain everywhere.",
-                        datetime.now(timezone.utc) - timedelta(hours=2))
-    client = make_app(tmp_path, NEWS_CACHE=FakeNews([headline])).test_client()
+def test_news_page_lists_headlines_with_pictures(tmp_path):
+    with_picture = Headline("Monsoon arrives early", "https://example.com/rain", "Rain everywhere.",
+                            datetime.now(timezone.utc) - timedelta(hours=2), "https://example.com/rain.jpg")
+    without = Headline("Library hours extended", "https://example.com/library", "", None)
+    client = make_app(tmp_path, NEWS_CACHE=FakeNews([with_picture, without])).test_client()
     html = page(client.get("/news"))
     assert 'href="https://example.com/rain"' in html and "Monsoon arrives early" in html and "2 hours ago" in html
+    assert 'src="https://example.com/rain.jpg"' in html and html.count('class="thumb"') == 1
 
 
 def test_news_page_explains_when_the_feed_is_down(tmp_path):
@@ -268,16 +371,37 @@ def test_face_login_can_be_switched_off(tmp_path):
 
 # Odds and ends
 
-def test_seed_command_runs_once(app):
+def test_seed_command_fills_the_feed_once(app):
     runner = app.test_cli_runner()
-    assert "Added demo users" in runner.invoke(args=["seed"]).output
+    output = runner.invoke(args=["seed"]).output
+    assert f"Added {len(DEMO_USERS)} demo users" in output
     assert "nothing was added" in runner.invoke(args=["seed"]).output
-    assert len(rows(app, "SELECT * FROM posts")) == 4
+    assert len(rows(app, "SELECT * FROM posts")) == len(DEMO_POSTS)
+    assert len(rows(app, "SELECT * FROM comments")) == len(DEMO_COMMENTS)
+    assert len(rows(app, "SELECT * FROM likes")) > len(DEMO_POSTS)
+    newest = rows(app, "SELECT body FROM posts ORDER BY created_at DESC LIMIT 1")[0][0]
+    assert newest == DEMO_POSTS[-1][2]
+
+
+def test_every_page_has_the_app_shell(client):
+    html = page(client.get("/check"))
+    assert 'class="sidebar"' in html and 'class="tabbar"' in html and "data-theme-toggle" in html
+    assert 'name="csrf-token"' in html and "Kindfeed" in html
+
+
+def test_the_app_name_can_be_changed(tmp_path):
+    client = make_app(tmp_path, APP_NAME="Hearth").test_client()
+    assert "Hearth" in page(client.get("/")) and "Kindfeed" not in page(client.get("/"))
 
 
 def test_method_not_allowed_page(client):
     response = client.get("/logout")
     assert response.status_code == 405 and "kind of request" in page(response)
+
+
+def test_avatar_helpers():
+    assert _hue("maya") == _hue("MAYA") and 0 <= _hue("maya") < 360 and _hue("maya") != _hue("sam")
+    assert _initial("maya") == "M" and _initial("_x") == "X" and _initial("___") == "?"
 
 
 def test_ago():
@@ -294,4 +418,11 @@ def test_with_the_real_model(tmp_path, classifier):
     kind = post(client, "/posts", {"body": "Thanks for helping me move this weekend, you're the best"})
     mean = post(client, "/posts", {"body": "shut up you dumb idiot, nobody likes you"})
     assert kind.status_code == 302
-    assert mean.status_code == 422 and "wasn&#39;t posted" in page(mean)
+    assert mean.status_code == 422 and "Hold on" in page(mean) and "<mark" in page(mean)
+
+
+def test_the_real_demo_posts_all_pass_moderation(tmp_path, classifier):
+    app = make_app(tmp_path, CLASSIFIER=classifier)
+    app.test_cli_runner().invoke(args=["seed"])
+    assert len(rows(app, "SELECT * FROM posts")) == len(DEMO_POSTS)
+    assert len(rows(app, "SELECT * FROM comments")) == len(DEMO_COMMENTS)

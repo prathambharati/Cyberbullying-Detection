@@ -1,4 +1,4 @@
-"""SQLite storage for users, posts and comments.
+"""SQLite storage for users, posts, comments and likes.
 
 Blocked posts are never saved. For each user the database keeps a password
 hash, an optional PIN hash and an optional face embedding: 128 numbers, not a
@@ -36,8 +36,27 @@ CREATE TABLE IF NOT EXISTS comments (
     score REAL NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS likes (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, post_id)
+);
 CREATE INDEX IF NOT EXISTS comments_by_post ON comments (post_id);
+CREATE INDEX IF NOT EXISTS likes_by_post ON likes (post_id);
+CREATE INDEX IF NOT EXISTS posts_by_user ON posts (user_id);
 """
+
+# Every post query returns the same columns, including how many comments and
+# likes it has and whether the person looking at it has liked it.
+_POSTS = """
+    SELECT posts.*, users.username,
+           (SELECT COUNT(*) FROM comments WHERE comments.post_id = posts.id) AS comment_count,
+           (SELECT COUNT(*) FROM likes WHERE likes.post_id = posts.id) AS like_count,
+           EXISTS (SELECT 1 FROM likes WHERE likes.post_id = posts.id AND likes.user_id = :viewer) AS liked
+    FROM posts JOIN users ON users.id = posts.user_id
+"""
+_NEWEST_FIRST = " ORDER BY posts.created_at DESC, posts.id DESC LIMIT :limit"
 
 
 class UsernameTaken(ValueError):
@@ -59,11 +78,11 @@ def _now() -> str:
 
 # Users
 
-def create_user(conn, username: str, password: str) -> int:
+def create_user(conn, username: str, password: str, created_at: str | None = None) -> int:
     try:
         cursor = conn.execute(
             "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
-            (username, generate_password_hash(password), _now()),
+            (username, generate_password_hash(password), created_at or _now()),
         )
     except sqlite3.IntegrityError as exc:
         raise UsernameTaken(username) from exc
@@ -103,41 +122,76 @@ def face_of(user) -> np.ndarray | None:
     return None if blob is None else np.frombuffer(blob, dtype=np.float32)
 
 
-# Posts and comments
+def user_stats(conn, user_id: int) -> dict:
+    def count(sql):
+        return conn.execute(sql, (user_id,)).fetchone()[0]
 
-def add_post(conn, user_id: int, body: str, score: float) -> int:
-    cursor = conn.execute(
-        "INSERT INTO posts (user_id, body, score, created_at) VALUES (?, ?, ?, ?)",
-        (user_id, body, score, _now()),
-    )
-    conn.commit()
-    return cursor.lastrowid
+    return {
+        "posts": count("SELECT COUNT(*) FROM posts WHERE user_id = ?"),
+        "likes": count("SELECT COUNT(*) FROM likes JOIN posts ON posts.id = likes.post_id WHERE posts.user_id = ?"),
+        "comments": count("SELECT COUNT(*) FROM comments WHERE user_id = ?"),
+    }
 
 
-def recent_posts(conn, limit: int = 50):
+def recent_posters(conn, limit: int = 12):
+    """People who posted most recently, newest first. The feed shows them as stories."""
     return conn.execute(
         """
-        SELECT posts.*, users.username,
-               (SELECT COUNT(*) FROM comments WHERE comments.post_id = posts.id) AS comment_count
+        SELECT users.username, MAX(posts.created_at) AS last_post
         FROM posts JOIN users ON users.id = posts.user_id
-        ORDER BY posts.id DESC
+        GROUP BY users.id
+        ORDER BY last_post DESC
         LIMIT ?
         """,
         (limit,),
     ).fetchall()
 
 
-def get_post(conn, post_id: int):
+# Posts, comments and likes
+
+def add_post(conn, user_id: int, body: str, score: float, created_at: str | None = None) -> int:
+    cursor = conn.execute(
+        "INSERT INTO posts (user_id, body, score, created_at) VALUES (?, ?, ?, ?)",
+        (user_id, body, score, created_at or _now()),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def recent_posts(conn, limit: int = 50, viewer_id: int | None = None):
+    return conn.execute(_POSTS + _NEWEST_FIRST, {"viewer": viewer_id or 0, "limit": limit}).fetchall()
+
+
+def posts_by(conn, user_id: int, limit: int = 50, viewer_id: int | None = None):
     return conn.execute(
-        "SELECT posts.*, users.username FROM posts JOIN users ON users.id = posts.user_id WHERE posts.id = ?",
-        (post_id,),
-    ).fetchone()
+        _POSTS + " WHERE posts.user_id = :author" + _NEWEST_FIRST,
+        {"viewer": viewer_id or 0, "author": user_id, "limit": limit},
+    ).fetchall()
 
 
-def add_comment(conn, post_id: int, user_id: int, body: str, score: float) -> int:
+def get_post(conn, post_id: int, viewer_id: int | None = None):
+    return conn.execute(_POSTS + " WHERE posts.id = :post", {"viewer": viewer_id or 0, "post": post_id}).fetchone()
+
+
+def delete_post(conn, post_id: int) -> None:
+    conn.execute("DELETE FROM posts WHERE id = ?", (post_id,))  # comments and likes go with it
+    conn.commit()
+
+
+def toggle_like(conn, user_id: int, post_id: int) -> tuple[bool, int]:
+    """Like the post, or unlike it if it was liked already. Returns (liked now, total likes)."""
+    removed = conn.execute("DELETE FROM likes WHERE user_id = ? AND post_id = ?", (user_id, post_id)).rowcount
+    if not removed:
+        conn.execute("INSERT INTO likes (user_id, post_id, created_at) VALUES (?, ?, ?)", (user_id, post_id, _now()))
+    conn.commit()
+    total = conn.execute("SELECT COUNT(*) FROM likes WHERE post_id = ?", (post_id,)).fetchone()[0]
+    return not removed, total
+
+
+def add_comment(conn, post_id: int, user_id: int, body: str, score: float, created_at: str | None = None) -> int:
     cursor = conn.execute(
         "INSERT INTO comments (post_id, user_id, body, score, created_at) VALUES (?, ?, ?, ?, ?)",
-        (post_id, user_id, body, score, _now()),
+        (post_id, user_id, body, score, created_at or _now()),
     )
     conn.commit()
     return cursor.lastrowid
@@ -149,7 +203,7 @@ def comments_for(conn, post_id: int):
         SELECT comments.*, users.username
         FROM comments JOIN users ON users.id = comments.user_id
         WHERE comments.post_id = ?
-        ORDER BY comments.id
+        ORDER BY comments.created_at, comments.id
         """,
         (post_id,),
     ).fetchall()

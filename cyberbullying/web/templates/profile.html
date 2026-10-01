@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import post_card, avatar, icon, plural with context %}
+
+{% block title %}{{ person.username }} | {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<section class="card profile-head">
+  <div class="cover" style="--hue: {{ person.username | hue }}"></div>
+  <div class="profile-main">
+    {{ avatar(person.username, "xl", ring=True) }}
+    <div class="profile-text">
+      <h1>{{ person.username }}</h1>
+      <p class="muted">Joined {{ person.created_at | month_year }}</p>
+    </div>
+    {% if g.user and g.user.id == person.id %}
+      <a class="button small" href="{{ url_for('auth.account') }}">{{ icon("settings") }}<span>Settings</span></a>
+    {% endif %}
+  </div>
+  <ul class="stats">
+    <li><strong>{{ stats.posts }}</strong><span>{{ "post" if stats.posts == 1 else "posts" }}</span></li>
+    <li><strong>{{ stats.likes }}</strong><span>{{ "like" if stats.likes == 1 else "likes" }}</span></li>
+    <li><strong>{{ stats.comments }}</strong><span>{{ "comment" if stats.comments == 1 else "comments" }}</span></li>
+  </ul>
+</section>
+
+{% for post in posts %}
+  {{ post_card(post) }}
+{% else %}
+  <div class="empty">
+    <span class="empty-emoji" aria-hidden="true">✨</span>
+    <p class="muted">{% if g.user and g.user.id == person.id %}You haven't posted yet.{% else %}{{ person.username }} hasn't posted yet.{% endif %}</p>
+  </div>
+{% endfor %}
+{% endblock %}

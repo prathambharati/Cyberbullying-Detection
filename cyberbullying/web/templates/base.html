@@ -1,44 +1,103 @@
+{% from "_macros.html" import icon, logo, avatar with context %}
+{%- macro nav_item(endpoint, icon_name, label, href=None, extra=()) -%}
+  {%- set here = request.endpoint == endpoint or request.endpoint in extra -%}
+  <a class="nav-item{% if here %} active{% endif %}" href="{{ href or url_for(endpoint) }}"{% if here %} aria-current="page"{% endif %}>
+    {{ icon(icon_name) }}<span>{{ label }}</span>
+  </a>
+{%- endmacro -%}
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Cyberbullying Detection{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="theme-color" content="#7b2ff7">
+  <title>{% block title %}{{ config.APP_NAME }}{% endblock %}</title>
+  <script>try { var theme = localStorage.getItem("theme"); if (theme) document.documentElement.dataset.theme = theme; } catch (e) {}</script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
 <body>
-  <header class="site-header">
-    <div class="wrap header-row">
-      <a class="brand" href="{{ url_for('views.feed') }}"><span class="brand-mark" aria-hidden="true"></span>Cyberbullying Detection</a>
-      <nav aria-label="Main">
-        <a href="{{ url_for('views.feed') }}"{% if request.endpoint in ('views.feed', 'views.show_post') %} aria-current="page"{% endif %}>Feed</a>
-        <a href="{{ url_for('views.check') }}"{% if request.endpoint == 'views.check' %} aria-current="page"{% endif %}>Check a message</a>
-        <a href="{{ url_for('views.news') }}"{% if request.endpoint == 'views.news' %} aria-current="page"{% endif %}>News</a>
+  <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="brand-gradient" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#7b2ff7"/><stop offset="0.55" stop-color="#f107a3"/><stop offset="1" stop-color="#ff8a00"/>
+      </linearGradient>
+    </defs>
+  </svg>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <div class="app">
+    <aside class="sidebar">
+      <a class="brand" href="{{ url_for('views.feed') }}">{{ logo(34) }}<span class="brand-name">{{ config.APP_NAME }}</span></a>
+      <nav class="side-nav" aria-label="Main">
+        {{ nav_item("views.feed", "home", "Home", extra=("views.show_post",)) }}
+        {{ nav_item("views.check", "sparkles", "Try the model") }}
+        {{ nav_item("views.news", "news", "News") }}
         {% if g.user %}
-          <a href="{{ url_for('auth.account') }}"{% if request.endpoint == 'auth.account' %} aria-current="page"{% endif %}>{{ g.user.username }}</a>
-          <form method="post" action="{{ url_for('auth.logout') }}" class="inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="link-button">Log out</button>
-          </form>
+          {{ nav_item("views.profile", "user", "Profile", href=url_for("views.profile", username=g.user.username)) }}
+          {{ nav_item("auth.account", "settings", "Settings") }}
         {% else %}
-          <a href="{{ url_for('auth.login') }}"{% if request.endpoint in ('auth.login', 'auth.face_login') %} aria-current="page"{% endif %}>Log in</a>
-          <a class="button small" href="{{ url_for('auth.register') }}">Sign up</a>
+          {{ nav_item("auth.login", "login", "Log in", extra=("auth.face_login",)) }}
         {% endif %}
       </nav>
-    </div>
-  </header>
+      <div class="side-foot">
+        <button type="button" class="nav-item" data-theme-toggle>{{ icon("moon") }}<span>Switch theme</span></button>
+        {% if g.user %}
+          <form method="post" action="{{ url_for('auth.logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="nav-item">{{ icon("logout") }}<span>Log out</span></button>
+          </form>
+        {% endif %}
+      </div>
+    </aside>
 
-  <main class="wrap">
+    <header class="topbar">
+      <a class="brand" href="{{ url_for('views.feed') }}">{{ logo(28) }}<span class="brand-name">{{ config.APP_NAME }}</span></a>
+      <div class="topbar-actions">
+        <button type="button" class="icon-button" data-theme-toggle aria-label="Switch theme">{{ icon("moon") }}</button>
+        {% if g.user %}
+          <form method="post" action="{{ url_for('auth.logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="icon-button" aria-label="Log out">{{ icon("logout") }}</button>
+          </form>
+        {% else %}
+          <a class="button primary small" href="{{ url_for('auth.register') }}">Sign up</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <main class="main" id="main">
+      {% block content %}{% endblock %}
+    </main>
+
+    <aside class="rail">
+      {% block rail %}{% include "_rail.html" %}{% endblock %}
+    </aside>
+
+    <nav class="tabbar" aria-label="Main">
+      {{ nav_item("views.feed", "home", "Home", extra=("views.show_post",)) }}
+      {{ nav_item("views.check", "sparkles", "Try it") }}
+      {{ nav_item("views.news", "news", "News") }}
+      {% if g.user %}
+        <a class="nav-item{% if request.endpoint in ('views.profile', 'auth.account') %} active{% endif %}" href="{{ url_for('views.profile', username=g.user.username) }}">
+          {{ avatar(g.user.username, "sm") }}<span>You</span>
+        </a>
+      {% else %}
+        {{ nav_item("auth.login", "login", "Log in", extra=("auth.face_login", "auth.register")) }}
+      {% endif %}
+    </nav>
+  </div>
+
+  <div class="toasts" aria-live="polite">
     {% for category, message in get_flashed_messages(with_categories=true) %}
-      <p class="flash{% if category == 'error' %} flash-error{% endif %}" role="status">{{ message }}</p>
+      <div class="toast{% if category == 'error' %} error{% endif %}" role="status">
+        <span>{{ message }}</span>
+        <button type="button" aria-label="Dismiss">&times;</button>
+      </div>
     {% endfor %}
-    {% block content %}{% endblock %}
-  </main>
-
-  <footer class="wrap site-footer">
-    Every post and comment is checked by a BiLSTM model before it goes up.
-    <a href="{{ url_for('views.check') }}">See how it scores a message.</a>
-  </footer>
+  </div>
   {% block scripts %}{% endblock %}
 </body>
 </html>

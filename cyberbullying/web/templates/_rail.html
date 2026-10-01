@@ -1,0 +1,30 @@
+{% from "_macros.html" import icon, avatar with context %}
+{% if g.user %}
+  <section class="card me">
+    <a class="who" href="{{ url_for('views.profile', username=g.user.username) }}">
+      {{ avatar(g.user.username, "lg", ring=True) }}
+      <span><strong>{{ g.user.username }}</strong><span class="muted small">View your profile</span></span>
+    </a>
+  </section>
+{% else %}
+  <section class="card join">
+    <h2>Join {{ config.APP_NAME }}</h2>
+    <p>A feed where every post and comment is checked for bullying before anyone sees it.</p>
+    <a class="button primary block" href="{{ url_for('auth.register') }}">Create an account</a>
+    <p class="muted small">Already here? <a href="{{ url_for('auth.login') }}">Log in</a></p>
+  </section>
+{% endif %}
+
+<section class="card how">
+  <h2>{{ icon("shield") }} How it keeps things kind</h2>
+  <ol>
+    <li>You write a post or a comment.</li>
+    <li>A BiLSTM trained on over 200,000 labelled comments and tweets scores it as you type.</li>
+    <li>If it reads as abusive, it comes back to you with the words that set it off.</li>
+  </ol>
+  <a class="button block" href="{{ url_for('views.check') }}">{{ icon("sparkles") }}<span>Try the model</span></a>
+</section>
+
+<p class="rail-foot muted small">
+  A demo app from the <a href="https://github.com/prathambharati/Cyberbullying-Detection">Cyberbullying Detection</a> project.
+</p>

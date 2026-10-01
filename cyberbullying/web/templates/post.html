@@ -1,40 +1,33 @@
 {% extends "base.html" %}
-{% from "_macros.html" import composer, score_badge with context %}
+{% from "_macros.html" import composer, post_card, avatar, icon with context %}
 
-{% block title %}{{ post.username }}'s post | Cyberbullying Detection{% endblock %}
+{% block title %}{{ post.username }}'s post | {{ config.APP_NAME }}{% endblock %}
 
 {% block content %}
-<p><a href="{{ url_for('views.feed') }}">Back to the feed</a></p>
+<a class="back" href="{{ url_for('views.feed') }}">{{ icon("arrow-left") }}<span>Feed</span></a>
 
-<article class="card post">
-  <header class="row">
-    <strong>{{ post.username }}</strong>
-    <span class="muted small">{{ post.created_at | ago }}</span>
-  </header>
-  <p class="body">{{ post.body }}</p>
-  <footer class="row small muted">
-    <span>{{ comments | length }} comment{{ '' if comments | length == 1 else 's' }}</span>
-    {{ score_badge(post.score) }}
-  </footer>
-</article>
+{{ post_card(post, link=False) }}
 
-<section class="comments">
+<section class="comments" aria-label="Comments">
   {% for comment in comments %}
     <div class="comment">
-      <div class="row">
-        <strong>{{ comment.username }}</strong>
-        <span class="muted small">{{ comment.created_at | ago }} · {{ score_badge(comment.score) }}</span>
+      <a href="{{ url_for('views.profile', username=comment.username) }}">{{ avatar(comment.username, "sm") }}</a>
+      <div>
+        <div class="bubble">
+          <a class="name" href="{{ url_for('views.profile', username=comment.username) }}">{{ comment.username }}</a>
+          <p>{{ comment.body }}</p>
+        </div>
+        <span class="muted small">{{ comment.created_at | ago }} · checked · {{ "%.2f" % comment.score }}</span>
       </div>
-      <p class="body">{{ comment.body }}</p>
     </div>
   {% else %}
-    <p class="muted">No comments yet.</p>
+    <p class="muted empty-comments">No comments yet. Start the conversation.</p>
   {% endfor %}
 </section>
 
 {% if g.user %}
-  {{ composer(url_for('views.add_comment', post_id=post.id), "Write a comment", "Comment", draft or '', error) }}
+  {{ composer(url_for("views.add_comment", post_id=post.id), "Write a comment", "Reply", draft or "", review, rows=2) }}
 {% else %}
-  <p class="card muted"><a href="{{ url_for('auth.login', next=request.path) }}">Log in</a> to comment.</p>
+  <p class="card muted"><a href="{{ url_for('auth.login', next=request.path) }}">Log in</a> to join the conversation.</p>
 {% endif %}
 {% endblock %}

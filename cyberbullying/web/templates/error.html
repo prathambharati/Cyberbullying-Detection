@@ -1,11 +1,13 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon with context %}
 
-{% block title %}{{ code }} | Cyberbullying Detection{% endblock %}
+{% block title %}{{ code }} | {{ config.APP_NAME }}{% endblock %}
 
 {% block content %}
-<section class="narrow">
+<div class="empty error-page">
+  <span class="empty-emoji" aria-hidden="true">{{ "🔍" if code == 404 else "🙈" }}</span>
   <h1>{{ code }}</h1>
   <p>{{ message }}</p>
-  <p><a href="{{ url_for('views.feed') }}">Back to the feed</a></p>
-</section>
+  <a class="button primary" href="{{ url_for('views.feed') }}">{{ icon("home") }}<span>Back to the feed</span></a>
+</div>
 {% endblock %}

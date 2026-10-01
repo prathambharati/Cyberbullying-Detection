@@ -1,11 +1,14 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon, logo with context %}
 
-{% block title %}Sign up | Cyberbullying Detection{% endblock %}
+{% block title %}Sign up | {{ config.APP_NAME }}{% endblock %}
 
 {% block content %}
-<section class="narrow">
-  <h1>Create an account</h1>
-  <form method="post" class="card stack">
+<section class="card auth">
+  <div class="auth-logo">{{ logo(56) }}</div>
+  <h1>Join {{ config.APP_NAME }}</h1>
+  <p class="muted">A feed where every post is checked for bullying before anyone sees it.</p>
+  <form method="post" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Username
       <input name="username" value="{{ username or '' }}" pattern="[A-Za-z0-9_]{3,20}" autocomplete="username" required autofocus>
@@ -18,9 +21,9 @@
     <label>Password again
       <input name="confirm" type="password" minlength="8" autocomplete="new-password" required>
     </label>
-    {% if error %}<p class="blocked" role="alert">{{ error }}</p>{% endif %}
-    <button>Sign up</button>
+    {% if error %}<p class="notice warn" role="alert">{{ icon("alert") }}<span>{{ error }}</span></p>{% endif %}
+    <button class="button primary block">Sign up</button>
   </form>
-  <p class="muted">Already have an account? <a href="{{ url_for('auth.login') }}">Log in</a>.</p>
+  <p class="muted small center">Already have an account? <a href="{{ url_for('auth.login') }}">Log in</a></p>
 </section>
 {% endblock %}

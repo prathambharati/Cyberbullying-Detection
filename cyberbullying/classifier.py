@@ -51,29 +51,48 @@ class Classifier:
 
     def predict(self, texts) -> list[Prediction]:
         texts = list(texts)
-        rows, owners = [], []
-        for i, text in enumerate(texts):
-            ids = self.vocab.encode(tokenize(text))
-            # No words at all (empty, or only links and @mentions) means nothing to judge.
-            # The model would otherwise score pure padding, which means nothing.
-            if not ids:
-                continue
-            for window in windows(ids, self.max_len):
-                rows.append(window)
-                owners.append(i)
-
-        worst = {}
-        if rows:
-            harm, kind = self._run(np.array(rows, dtype="int32"))
-            # A long post is split into windows. Judge it by its worst one.
-            for row, owner in enumerate(owners):
-                if owner not in worst or harm[row] > harm[worst[owner]]:
-                    worst[owner] = row
-        return [self._prediction(harm[worst[i]], kind[worst[i]]) if i in worst else self._nothing()
-                for i in range(len(texts))]
+        scored = self._score([self.vocab.encode(tokenize(text)) for text in texts])
+        return [self._prediction(*result) if result else self._nothing() for result in scored]
 
     def predict_one(self, text: str) -> Prediction:
         return self.predict([text])[0]
+
+    def explain(self, text: str) -> list[tuple[str, float]]:
+        """How much each word pushed the bullying score up.
+
+        Each word is left out in turn and the rest is scored again. The drop in
+        score is that word's weight, so words that don't matter get 0. It's a
+        simple method, but it's honest: it only uses what the model does.
+        """
+        tokens = tokenize(text)
+        ids = self.vocab.encode(tokens)
+        if not ids:
+            return []
+        variants = [ids] + [ids[:i] + ids[i + 1 :] for i in range(len(ids))]
+        scores = [result[0] if result else 0.0 for result in self._score(variants)]
+        return [(token, round(max(0.0, scores[0] - score), 4)) for token, score in zip(tokens, scores[1:])]
+
+    def _score(self, id_lists) -> list[tuple[float, np.ndarray] | None]:
+        """(harm score, kind probabilities) for each list of token ids.
+
+        A list with no ids gets None: an empty post, or one that's only links
+        and @mentions, has nothing to judge, and scoring pure padding means
+        nothing. A long post is split into windows and judged by its worst one.
+        """
+        rows, owners = [], []
+        for i, ids in enumerate(id_lists):
+            for window in windows(ids, self.max_len) if ids else []:
+                rows.append(window)
+                owners.append(i)
+        if not rows:
+            return [None] * len(id_lists)
+
+        harm, kind = self._run(np.array(rows, dtype="int32"))
+        worst = {}
+        for row, owner in enumerate(owners):
+            if owner not in worst or harm[row] > harm[worst[owner]]:
+                worst[owner] = row
+        return [(float(harm[worst[i]]), kind[worst[i]]) if i in worst else None for i in range(len(id_lists))]
 
     def _run(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         harm, kind = [], []

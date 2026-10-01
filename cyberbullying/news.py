@@ -1,5 +1,6 @@
-"""Headlines for the News page, from the Times of India "Top Headlines" feed."""
+"""Headlines for the News page, from the Times of India top stories feed."""
 
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -9,8 +10,10 @@ from html.parser import HTMLParser
 import feedparser
 import requests
 
-DEFAULT_FEED = "https://timesofindia.indiatimes.com/rssfeeds/1221656.cms"
+# The "Top Headlines" feed the first version used stopped updating in 2022. This one is live.
+DEFAULT_FEED = "https://timesofindia.indiatimes.com/rssfeedstopstories.cms"
 USER_AGENT = "Mozilla/5.0 (compatible; CyberbullyingDetection/2.0)"
+_TOI_PHOTO = re.compile(r"https://static\.toiimg\.com/photo/msid-(\d+)")
 
 
 @dataclass(frozen=True)
@@ -19,23 +22,55 @@ class Headline:
     link: str
     summary: str
     published: datetime | None
+    image: str | None = None
 
 
-class _TextOnly(HTMLParser):
+class _Reader(HTMLParser):
+    """Collects the text of a snippet of HTML, plus its first web image."""
+
     def __init__(self):
         super().__init__()
         self.parts = []
+        self.image = None
 
     def handle_data(self, data):
         self.parts.append(data)
 
+    def handle_starttag(self, tag, attrs):
+        if tag == "img" and self.image is None:
+            src = dict(attrs).get("src") or ""
+            if src.startswith(("https://", "http://")):
+                self.image = src
+
+
+def _read(markup: str) -> tuple[str, str | None]:
+    parser = _Reader()
+    parser.feed(markup or "")
+    parser.close()
+    return " ".join(" ".join(parser.parts).split()), parser.image
+
 
 def strip_html(markup: str) -> str:
     """Feed summaries are HTML with images in them. Keep just the words."""
-    parser = _TextOnly()
-    parser.feed(markup or "")
-    parser.close()
-    return " ".join(" ".join(parser.parts).split())
+    return _read(markup)[0]
+
+
+def _enclosure_image(entry) -> str | None:
+    for link in entry.get("links", []):
+        href = link.get("href", "")
+        if link.get("rel") == "enclosure" and str(link.get("type", "")).startswith("image/") \
+                and href.startswith(("https://", "http://")):
+            return href
+    return None
+
+
+def thumbnail(url: str) -> str:
+    """TOI links full-size photos, often well over a megabyte each. Ask its image
+    server for a 320 pixel wide copy instead, about a fifteenth of the size."""
+    match = _TOI_PHOTO.match(url)
+    if not match:
+        return url
+    return f"https://static.toiimg.com/thumb/msid-{match[1]},width-320,resizemode-4/{match[1]}.jpg"
 
 
 def parse_feed(content: bytes, limit: int = 20) -> list[Headline]:
@@ -50,7 +85,9 @@ def parse_feed(content: bytes, limit: int = 20) -> list[Headline]:
         published = None
         if entry.get("published_parsed"):
             published = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
-        headlines.append(Headline(title, link, strip_html(entry.get("summary", "")), published))
+        summary, inline_image = _read(entry.get("summary", ""))
+        image = _enclosure_image(entry) or inline_image
+        headlines.append(Headline(title, link, summary, published, thumbnail(image) if image else None))
         if len(headlines) == limit:
             break
     return headlines

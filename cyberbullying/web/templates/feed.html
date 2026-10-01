@@ -1,34 +1,45 @@
 {% extends "base.html" %}
-{% from "_macros.html" import composer, score_badge with context %}
+{% from "_macros.html" import composer, post_card, avatar, icon with context %}
 
 {% block content %}
-<section class="intro">
-  <h1>The feed</h1>
-  <p class="muted">Posts and comments go past a cyberbullying classifier first. If it flags something, the writer gets it back with a note instead of it being published.</p>
-</section>
+<h1 class="visually-hidden">Your feed</h1>
+
+{% if stories or g.user %}
+  <div class="stories" aria-label="Recently active">
+    {% if g.user %}
+      <a class="story" href="{{ url_for('views.profile', username=g.user.username) }}">
+        {{ avatar(g.user.username, "lg") }}<span>You</span>
+      </a>
+    {% endif %}
+    {% for story in stories if not g.user or story.username | lower != g.user.username | lower %}
+      <a class="story" href="{{ url_for('views.profile', username=story.username) }}">
+        {{ avatar(story.username, "lg", ring=True) }}<span>{{ story.username }}</span>
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}
 
 {% if g.user %}
-  {{ composer(url_for('views.create_post'), "What's on your mind, " ~ g.user.username ~ "?", "Post", draft or '', error) }}
+  {{ composer(url_for("views.create_post"), "What's on your mind, " ~ g.user.username ~ "?", "Post", draft or "", review) }}
 {% else %}
-  <p class="card muted">
-    <a href="{{ url_for('auth.login') }}">Log in</a> or <a href="{{ url_for('auth.register') }}">sign up</a> to post.
-    You can also <a href="{{ url_for('views.check') }}">try the model</a> without an account.
-  </p>
+  <section class="card welcome">
+    <h2>Share kindly.</h2>
+    <p>Every post and comment here goes past a cyberbullying classifier before anyone sees it.
+       If it reads as abusive, it goes back to the writer with the words that set it off.</p>
+    <div class="welcome-actions">
+      <a class="button primary" href="{{ url_for('auth.register') }}">Join {{ config.APP_NAME }}</a>
+      <a class="button" href="{{ url_for('views.check') }}">{{ icon("sparkles") }}<span>Try the model</span></a>
+    </div>
+  </section>
 {% endif %}
 
 {% for post in posts %}
-  <article class="card post">
-    <header class="row">
-      <strong>{{ post.username }}</strong>
-      <span class="muted small">{{ post.created_at | ago }}</span>
-    </header>
-    <p class="body">{{ post.body }}</p>
-    <footer class="row small muted">
-      <a href="{{ url_for('views.show_post', post_id=post.id) }}">{{ post.comment_count }} comment{{ '' if post.comment_count == 1 else 's' }}</a>
-      {{ score_badge(post.score) }}
-    </footer>
-  </article>
+  {{ post_card(post) }}
 {% else %}
-  <p class="empty muted">Nothing here yet. {% if g.user %}Say something nice to get it started.{% else %}Sign up and write the first post.{% endif %}</p>
+  <div class="empty">
+    <span class="empty-emoji" aria-hidden="true">🌱</span>
+    <p>Nothing here yet.</p>
+    <p class="muted">{% if g.user %}Say something nice to get it started.{% else %}Sign up and write the first post.{% endif %}</p>
+  </div>
 {% endfor %}
 {% endblock %}

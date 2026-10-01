@@ -24,6 +24,13 @@
       <title>Local team wins the state robotics final</title>
       <link>https://example.com/robotics</link>
       <description>Students celebrated after a close final round.</description>
+      <enclosure url="https://static.toiimg.com/photo/msid-12345,imgsize-1807006.cms" type="image/jpeg"/>
+    </item>
+    <item>
+      <title>A story whose picture link is not a web address</title>
+      <link>https://example.com/odd</link>
+      <description>No picture should be used.</description>
+      <enclosure url="javascript:alert(1)" type="image/jpeg"/>
     </item>
   </channel>
 </rss>
